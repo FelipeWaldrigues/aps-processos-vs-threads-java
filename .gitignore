@@ -1,0 +1,15 @@
+# Bytecode compilado
+*.class
+
+# Diretórios de build de IDEs
+.idea/
+.vscode/
+*.iml
+*.iws
+*.ipr
+
+# Arquivos temporários de IPC (gerados em runtime pelo ProcessMultiplier)
+/tmp/matrix_proc_*/
+
+# macOS
+.DS_Store
