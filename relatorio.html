@@ -1,0 +1,339 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<style>
+  @page { margin: 2.5cm 2.8cm; }
+
+  body {
+    font-family: "Times New Roman", Times, serif;
+    font-size: 12pt;
+    line-height: 1.8;
+    color: #000;
+    max-width: 100%;
+  }
+
+  h1 {
+    font-size: 15pt;
+    text-align: center;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    margin-bottom: 4px;
+  }
+
+  .subtitulo {
+    text-align: center;
+    font-size: 11pt;
+    color: #333;
+    margin-bottom: 2px;
+  }
+
+  .meta {
+    text-align: center;
+    font-size: 10.5pt;
+    color: #555;
+    margin-bottom: 30px;
+  }
+
+  hr.divisor {
+    border: none;
+    border-top: 1.5px solid #000;
+    margin: 18px 0 24px 0;
+  }
+
+  h2 {
+    font-size: 12.5pt;
+    font-weight: bold;
+    text-transform: uppercase;
+    border-bottom: 1px solid #ccc;
+    padding-bottom: 4px;
+    margin-top: 32px;
+    margin-bottom: 10px;
+  }
+
+  h3 {
+    font-size: 12pt;
+    font-weight: bold;
+    margin-top: 22px;
+    margin-bottom: 6px;
+  }
+
+  p { margin: 0 0 10px 0; text-align: justify; }
+
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 11pt;
+    margin: 14px 0 20px 0;
+  }
+
+  th {
+    background-color: #1a1a1a;
+    color: #fff;
+    padding: 7px 10px;
+    text-align: center;
+  }
+
+  td {
+    border: 1px solid #bbb;
+    padding: 6px 10px;
+    text-align: center;
+  }
+
+  tr:nth-child(even) td { background-color: #f5f5f5; }
+
+  .destaque {
+    background-color: #e8f4e8 !important;
+    font-weight: bold;
+  }
+
+  .alerta {
+    background-color: #fdecea !important;
+  }
+
+  .caption {
+    font-size: 10pt;
+    text-align: center;
+    color: #555;
+    margin-top: -14px;
+    margin-bottom: 18px;
+    font-style: italic;
+  }
+
+  .config-box {
+    background-color: #f8f8f8;
+    border-left: 4px solid #333;
+    padding: 10px 16px;
+    font-family: "Courier New", monospace;
+    font-size: 10.5pt;
+    margin: 14px 0;
+  }
+
+  ul {
+    margin: 6px 0 10px 0;
+    padding-left: 22px;
+  }
+
+  li { margin-bottom: 5px; text-align: justify; }
+</style>
+</head>
+<body>
+
+<h1>Benchmarking de Desempenho:<br>Processos vs. Threads em Java</h1>
+<p class="subtitulo">Disciplina: Sistemas Operacionais &nbsp;|&nbsp; Análise Técnica</p>
+<p class="meta">
+  Ambiente: Linux &nbsp;|&nbsp; Java 21 &nbsp;|&nbsp; CPU com 12 núcleos lógicos<br>
+  Matriz: 1.000 × 1.000 doubles &nbsp;|&nbsp; 5 execuções por cenário (1 descartada como aquecimento)
+</p>
+
+<hr class="divisor">
+
+<h2>1. Qual abordagem foi mais rápida? Por quê?</h2>
+
+<p>
+  As threads foram significativamente mais rápidas em todos os cenários testados. Com 8 workers,
+  a versão baseada em threads concluiu a multiplicação em <strong>54,78 ms</strong> em média, enquanto a versão
+  com processos levou <strong>519,74 ms</strong> — uma diferença de aproximadamente <strong>9,5 vezes</strong>. A tabela
+  abaixo resume os resultados coletados:
+</p>
+
+<table>
+  <thead>
+    <tr>
+      <th>Tipo</th>
+      <th>Workers</th>
+      <th>Média (ms)</th>
+      <th>Speedup*</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr class="destaque"><td>Threads</td><td>2</td><td>150,15</td><td>1,00×</td></tr>
+    <tr class="destaque"><td>Threads</td><td>4</td><td>79,21</td><td>1,90×</td></tr>
+    <tr class="destaque"><td>Threads</td><td>8</td><td>54,78</td><td>2,74×</td></tr>
+    <tr class="alerta"><td>Processos</td><td>2</td><td>402,22</td><td>0,37×</td></tr>
+    <tr class="alerta"><td>Processos</td><td>4</td><td>423,61</td><td>0,35×</td></tr>
+    <tr class="alerta"><td>Processos</td><td>8</td><td>519,74</td><td>0,29×</td></tr>
+  </tbody>
+</table>
+<p class="caption">* Speedup relativo ao baseline Threads com 2 workers (150,15 ms).</p>
+
+<p>
+  A causa principal dessa diferença está no custo de criação de cada processo. No modelo implementado
+  com <code>ProcessBuilder</code>, o processo pai precisa lançar N instâncias completamente novas da JVM.
+  Cada uma delas passa pelo ciclo completo de inicialização: carregamento do bytecode, alocação do heap,
+  inicialização do Garbage Collector e compilação JIT a frio. Esse overhead de startup fica entre
+  <strong>100 e 200 ms por processo</strong>, independentemente do trabalho computacional a ser feito.
+</p>
+
+<p>
+  Além do startup, o modelo de processos exige comunicação explícita entre pai e filhos (IPC).
+  Como processos não compartilham memória, as matrizes A e B (16 MB no total para N=1.000) precisam
+  ser serializadas em um arquivo binário temporário a cada execução — e cada processo filho lê esse
+  arquivo do disco individualmente antes de começar a calcular. Esse custo de I/O está embutido em
+  todo tempo medido.
+</p>
+
+<p>
+  Já no modelo de threads, A e B existem uma única vez no heap da JVM. Cada thread recebe
+  apenas uma referência para esses objetos e começa a calcular imediatamente, sem serialização
+  e sem nenhum custo de inicialização extra. O ganho de desempenho das threads é, portanto,
+  estrutural: elas eliminam dois dos maiores custos do modelo de processos (startup de JVM e IPC).
+</p>
+
+<hr class="divisor">
+
+<h2>2. Qual consumiu mais memória? Por quê?</h2>
+
+<p>
+  A versão com processos consome muito mais memória do sistema, e o crescimento é multiplicativo
+  com o número de workers. Para entender o porquê, é preciso comparar como cada modelo gerencia o heap.
+</p>
+
+<p>
+  No modelo de threads, todas elas vivem dentro da <strong>mesma instância da JVM</strong>. As matrizes A, B e C
+  são alocadas uma única vez no heap compartilhado. Com N=1.000 e double de 8 bytes, cada matriz ocupa
+  8 MB — ou seja, o conjunto completo de dados do problema ocupa ~24 MB, independentemente de quantas
+  threads estejam rodando. A única memória adicional por thread é sua própria pilha de execução
+  (stack), que para esse problema é da ordem de alguns kilobytes.
+</p>
+
+<p>
+  No modelo de processos, cada filho é uma JVM completamente independente com seu próprio heap isolado.
+  Cada processo filho carrega as duas matrizes de entrada A e B do arquivo para a sua própria memória
+  — mesmo que outro processo já as tenha carregado. Com 8 processos, o sistema mantém simultaneamente
+  8 cópias de A e 8 cópias de B na RAM, além do overhead base de cada JVM (tipicamente 30 a 60 MB
+  de memória nativa para estruturas internas do runtime). O consumo total pode facilmente ultrapassar
+  <strong>500 MB</strong> para um cenário com 8 workers.
+</p>
+
+<p>
+  Esse isolamento de heap é um reflexo direto do modelo de processos do sistema operacional: cada
+  processo possui seu próprio espaço de endereçamento virtual, protegido pelo kernel. Não há como
+  duas JVMs acessarem a mesma região de memória por padrão sem recorrer a mecanismos específicos
+  como memória compartilhada (POSIX <em>shared memory</em>) ou arquivos mapeados em memória —
+  recursos que não foram utilizados nesta implementação exatamente para representar o comportamento
+  natural do modelo.
+</p>
+
+<hr class="divisor">
+
+<h2>3. Qual apresentou maior isolamento?</h2>
+
+<p>
+  O modelo de processos oferece isolamento muito superior. Por definição, cada JVM filha é um
+  processo independente do ponto de vista do sistema operacional: possui seu próprio espaço de
+  endereçamento, descritores de arquivo e estado de execução. O kernel garante que nenhum processo
+  consiga ler ou escrever diretamente na memória de outro — qualquer acesso cruzado exigiria
+  chamadas de sistema explícitas, que o SO pode inspecionar e bloquear.
+</p>
+
+<p>
+  Na prática, isso significa que se um processo filho travar, lançar uma exceção não tratada ou
+  ser encerrado abruptamente pelo SO (por exemplo, por violação de segmento ou por atingir um
+  limite de memória), os demais processos continuam operando normalmente. O processo pai detecta
+  a falha via <code>waitFor()</code> com exit code diferente de zero e pode reagir — relançar o
+  worker, registrar o erro ou abortar a operação de forma controlada.
+</p>
+
+<p>
+  No modelo de threads, o isolamento é muito menor. Todas as threads compartilham o mesmo heap
+  e o mesmo processo do SO. Uma exceção do tipo <code>OutOfMemoryError</code>, ou um bug que
+  corrompa a matriz C, afeta todas as threads simultaneamente. Se a JVM travar — por exemplo,
+  por um deadlock que o runtime decida encerrar — a aplicação inteira cai. Essa fragilidade é
+  o trade-off direto do compartilhamento de memória que torna as threads mais rápidas.
+</p>
+
+<hr class="divisor">
+
+<h2>4. O ganho de desempenho foi linear ao aumentar as unidades de execução?</h2>
+
+<p>
+  Para as threads, o escalonamento foi <strong>sublinear, mas próximo do ideal nos primeiros níveis</strong>.
+  De 2 para 4 threads, o speedup foi de <strong>1,90×</strong> (próximo do teórico 2,00×),
+  e de 4 para 8 threads, o ganho adicional foi de apenas <strong>1,45×</strong> em vez dos 2,00×
+  esperados em um cenário ideal. Isso pode ser explicado por três fatores:
+</p>
+
+<ul>
+  <li>
+    <strong>Saturação de largura de banda de memória:</strong> a multiplicação de matrizes é uma operação
+    memory-bound — o gargalo não é a capacidade de cálculo dos núcleos, mas a velocidade com que
+    a RAM consegue fornecer dados. A partir de certo ponto, adicionar mais threads não acelera o
+    processamento porque todas competem pelo mesmo barramento de memória.
+  </li>
+  <li>
+    <strong>Lei de Amdahl:</strong> mesmo que a parte paralela (cálculo das linhas) seja enorme, existe
+    uma fração serial do programa — geração das matrizes, montagem do resultado, sincronização via
+    <code>CountDownLatch</code> — que limita matematicamente o speedup máximo alcançável.
+  </li>
+  <li>
+    <strong>Overhead de escalonamento:</strong> com 8 threads em uma CPU de 12 núcleos lógicos, o SO
+    ainda precisa gerenciar os context switches entre threads, especialmente quando o scheduler
+    migra uma thread entre núcleos físicos distintos.
+  </li>
+</ul>
+
+<p>
+  Para os processos, o comportamento foi o oposto: o tempo aumentou com mais workers.
+  Com 2 processos a média foi 402,22 ms; com 8 processos subiu para 519,74 ms.
+  Isso ocorre porque o overhead fixo por processo (startup de JVM + leitura dos 16 MB do arquivo)
+  domina completamente o tempo de computação. Ao dobrar o número de processos, não se divide o
+  trabalho de forma eficiente — soma-se o custo de inicialização de mais JVMs e a contenção de
+  I/O no disco para leitura paralela do mesmo arquivo de entrada.
+</p>
+
+<hr class="divisor">
+
+<h2>5. Em quais cenários arquiteturais usar Processos pode ser mais vantajoso?</h2>
+
+<p>
+  Apesar do desempenho inferior neste benchmark específico, o modelo de processos é a escolha
+  correta em diversas situações arquiteturais relevantes:
+</p>
+
+<ul>
+  <li>
+    <strong>Microsserviços e sistemas distribuídos:</strong> quando os workers precisam rodar em
+    máquinas diferentes, threads simplesmente não são uma opção — processos (ou containers) são
+    a unidade natural de distribuição. O custo de IPC que penalizou o benchmark é absorvido pela
+    rede de qualquer forma nesses cenários.
+  </li>
+  <li>
+    <strong>Isolamento de segurança e multi-tenancy:</strong> em plataformas SaaS onde código de
+    múltiplos clientes roda no mesmo servidor, o isolamento de espaço de endereçamento é mandatório.
+    Um bug ou ataque em um processo cliente não pode vazar dados de outro cliente — algo que threads
+    no mesmo heap jamais garantiriam.
+  </li>
+  <li>
+    <strong>Tolerância a falhas e reinicialização independente:</strong> sistemas de processamento
+    em lote (batch) que precisam retomar tarefas individualmente sem derrubar o orquestrador se
+    beneficiam da independência dos processos. Um worker que trava pode ser relançado isoladamente.
+  </li>
+  <li>
+    <strong>Workloads de longa duração:</strong> o custo de inicializar uma JVM (~100–200 ms) é
+    irrelevante para um processo que ficará ativo por horas ou dias. Nesse caso, o benefício do
+    isolamento e da independência de ciclo de vida supera o overhead inicial de startup.
+  </li>
+  <li>
+    <strong>Integração com diferentes runtimes ou linguagens:</strong> se partes do sistema são
+    escritas em Python, Rust ou Go, processos são o único mecanismo de integração praticável.
+    Threads só funcionam dentro de uma única linguagem e runtime.
+  </li>
+</ul>
+
+<p>
+  Em resumo, processos são a escolha certa quando <em>isolamento, resiliência e distribuição</em>
+  são requisitos prioritários. Threads dominam quando o objetivo é maximizar o throughput em um
+  único nó com dados que cabem na memória compartilhada — exatamente o perfil da multiplicação
+  de matrizes que implementamos neste trabalho.
+</p>
+
+<hr class="divisor">
+
+<p style="font-size: 10pt; text-align: center; color: #666; margin-top: 30px;">
+  Código-fonte disponível em:
+  github.com/FelipeWaldrigues/aps-processos-vs-threads-java
+</p>
+
+</body>
+</html>
